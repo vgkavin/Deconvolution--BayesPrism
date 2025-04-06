@@ -27,7 +27,7 @@ rownames(bk.dat) <- bk.dat$Geneid
 bk.dat <- bk.dat[,7:72]
 #transpose for test compatibility
 bk.dat <- as.data.frame(t(bk.dat))
-
+metadata <- read.csv("OC_Khan_Metadata.csv")
 #specify celltype and cell state lables
 cell.type.lables <- rownames(sc.dat)
 cell.state.lables <- rownames(sc.dat)
@@ -118,10 +118,50 @@ All_plots.bp <- ggplot() +
 
 All_plots.bp
 
-#extract names of celltypes from results
-cells_bp <- colnames(theta)
-
 #to get coefficient of variance for cell fractions in each samples
 theta.cv <- bp.res@posterior.theta_f@theta.cv
+
+#identify marker genes using wilcoxon test
+
+theta <- as.data.frame(theta)
+
+celltypes <- colnames(theta)
+
+
+expression_list <- list()
+
+# Loop through each cell type and store the results in the list
+for (i in celltypes) {
+  expression_list[[i]] <- get.exp(bp = bp.res,
+                          state.or.type = "type",
+                          cell.name = i)
+}
+
+expression_list <- lapply(expression_list, function(x) {
+  as.data.frame(x, stringsAsFactors = FALSE)
+})
+
+#Add a row to each data frame indicating the groups
+expression_list <- lapply(expression_list, function(df) {
+  df$Group <- metadata$Sample[match(rownames(df), metadata$Expt)]
+  
+  return(df)
+})
+
+#split all dataframes in the expression list dataset to evaluate individually
+list2env(expression_list, envir = .GlobalEnv)
+
+
+#pefrom wilcoxon test on each celltype
+Adipocytes_result <- pairwise_wilcox_test(
+  data = Adipocytes,
+  formula = A1BG ~ Group,  # Dependent variable ~ Grouping variable
+  p.adjust.method = "holm"
+)
+
+expression_list_filter <- lapply(expression_list, function(df) {
+  df_filtered <- df[rowSums(df != 0) > 0, ]
+  return(df)
+})
 
 
